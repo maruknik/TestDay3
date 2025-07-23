@@ -1,61 +1,12 @@
-import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchBookingsByRoom, deleteBooking } from '../services/bookingsService';
-import { supabase } from '../supabaseClient';
-
-type Booking = {
-  id: string;
-  start_time: string;
-  end_time: string;
-  description: string;
-  user_email: string;
-};
+import { deleteBooking } from '../../services/bookingsService';
+import { useRoomBookings } from '../../hooks/useRoomBookings';
 
 export default function BookingsList() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
 
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [userRole, setUserRole] = useState<'admin' | 'user' | null>(null);
-
-  useEffect(() => {
-    if (!roomId) return;
-
-    const fetchData = async () => {
-      setLoading(true);
-
-      try {
- 
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        if (userError || !userData.user?.email) return;
-
-        const email = userData.user.email;
-
-
-        const { data: roleData, error: roleError } = await supabase
-          .from('room_user_roles')
-          .select('role')
-          .eq('room_id', roomId)
-          .eq('user_email', email)
-          .single();
-
-        if (!roleError && roleData?.role) {
-          setUserRole(roleData.role);
-        }
-
- 
-        const bookingsData = await fetchBookingsByRoom(roomId);
-        setBookings(bookingsData);
-      } catch (err) {
-        console.error('Помилка завантаження бронювань:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [roomId]);
+  const { bookings, setBookings, loading, userRole } = useRoomBookings(roomId);
 
   const handleDelete = async (id: string) => {
     if (confirm('Видалити бронювання?')) {

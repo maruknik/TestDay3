@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser } from '../services/authService';
 import { fetchBookingsByUser, fetchMeetingRoomsByUser } from '../services/dashboardService';
+import type { NullableUserRole } from '../types/role';
+import * as styles from './ui/dashboardStyles';
 
 type Booking = {
   id: string;
@@ -20,11 +22,11 @@ type MeetingRoom = {
 export default function Dashboard() {
   const [userName, setUserName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>('');
-  const [role, setRole] = useState<'admin' | 'user' | null>(null);
-
+  const [userRole, setRole] = useState<NullableUserRole>(null);
   const [rooms, setRooms] = useState<MeetingRoom[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -35,11 +37,11 @@ export default function Dashboard() {
           navigate('/login');
           return;
         }
+
         setUserName(user.user_metadata?.name ?? null);
         setUserEmail(user.email ?? '');
-
-        const userRole = user.user_metadata?.role === 'admin' ? 'admin' : 'user';
-        setRole(userRole);
+        const role = user.user_metadata?.role === 'admin' ? 'admin' : 'user';
+        setRole(role);
 
         if (!user.email) {
           alert('Email користувача відсутній');
@@ -61,52 +63,56 @@ export default function Dashboard() {
         setLoading(false);
       }
     }
+
     loadData();
   }, [navigate]);
 
-  if (loading)
-    return (
-      <p className="p-8 text-center text-gray-700 dark:text-gray-300">Завантаження...</p>
-    );
+  const displayName = useMemo(() => userName ?? userEmail, [userName, userEmail]);
+
+  const sortedBookings = useMemo(() => {
+    return [...bookings]
+      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+      .slice(0, 5);
+  }, [bookings]);
+
+  if (loading) return <p className={styles.loadingText}>Завантаження...</p>;
 
   return (
-    <div className="max-w-5xl mx-auto pt-6 px-6 py-8 bg-white dark:bg-gray-900 rounded-lg shadow-md">
-      <h1 className="text-4xl font-extrabold mb-6 text-gray-900 dark:text-white">
-        Вітаємо, {userName ?? userEmail}!
-      </h1>
-      <p className="mb-8 text-lg text-gray-700 dark:text-gray-300">
-        Ваша роль: <span className="font-semibold capitalize">{role}</span>
+    <div className={styles.container}>
+      <h1 className={styles.heading}>Вітаємо, {displayName}!</h1>
+
+      <p className={styles.userRoleText}>
+        Ваша роль: <span className="font-semibold capitalize">{userRole}</span>
       </p>
 
       <section className="mb-10">
-        <h2 className="text-3xl font-semibold mb-5 text-gray-800 dark:text-gray-100 border-b border-gray-300 dark:border-gray-700 pb-2">
-          Ваші переговорні кімнати
-        </h2>
+        <h2 className={styles.sectionTitle}>Ваші переговорні кімнати</h2>
         {rooms.length === 0 ? (
-          <p className="text-gray-600 dark:text-gray-400 italic">Ви ще не маєте жодної кімнати.</p>
+          <p className={styles.noDataText}>Ви ще не маєте жодної кімнати.</p>
         ) : (
           <ul className="space-y-4">
             {rooms.map(room => (
               <li
                 key={room.id}
-                className="p-5 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-shadow shadow-sm hover:shadow-md flex justify-between items-center"
-          
+                className={styles.roomCard}
                 onClick={() => navigate(`/meeting-rooms/${room.id}/bookings`)}
                 role="button"
                 tabIndex={0}
                 onKeyPress={e => {
-                  if (e.key === 'Enter' || e.key === ' ') navigate(`/meeting-rooms/${room.id}/bookings`);
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    navigate(`/meeting-rooms/${room.id}/bookings`);
+                  }
                 }}
               >
-                <span className="text-xl font-medium text-gray-900 dark:text-white">{room.name}</span>
+                <span className={styles.roomName}>{room.name}</span>
 
-                {role === 'admin' && (
+                {userRole === 'admin' && (
                   <button
                     onClick={e => {
-                      e.stopPropagation(); 
+                      e.stopPropagation();
                       navigate(`/meeting-rooms/${room.id}/users`);
                     }}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded ml-4"
+                    className={styles.manageButton}
                   >
                     Керувати користувачами
                   </button>
@@ -118,51 +124,43 @@ export default function Dashboard() {
       </section>
 
       <section>
-        <h2 className="text-3xl font-semibold mb-5 text-gray-800 dark:text-gray-100 border-b border-gray-300 dark:border-gray-700 pb-2">
-          Найближчі бронювання
-        </h2>
-        {bookings.length === 0 ? (
-          <p className="text-gray-600 dark:text-gray-400 italic">У вас немає активних бронювань.</p>
+        <h2 className={styles.sectionTitle}>Найближчі бронювання</h2>
+        {sortedBookings.length === 0 ? (
+          <p className={styles.noDataText}>У вас немає активних бронювань.</p>
         ) : (
           <ul className="space-y-4">
-            {bookings
-              .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
-              .slice(0, 5)
-              .map(b => (
-                <li
-                  key={b.id}
-                  className="p-5 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-shadow shadow-sm hover:shadow-md"
-                  onClick={() => navigate(`/meeting-rooms/${b.room_id}/bookings/${b.id}/edit`)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyPress={e => {
-                    if (e.key === 'Enter' || e.key === ' ') navigate(`/meeting-rooms/${b.room_id}/bookings/${b.id}/edit`);
-                  }}
-                >
-                  <div className="font-semibold text-gray-900 dark:text-white">{b.room_name}</div>
-                  <div className="text-gray-700 dark:text-gray-300">
-                    {new Date(b.start_time).toLocaleString()} - {new Date(b.end_time).toLocaleString()}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">{b.description}</div>
-                </li>
-              ))}
+            {sortedBookings.map(b => (
+              <li
+                key={b.id}
+                className={styles.bookingCard}
+                onClick={() => navigate(`/meeting-rooms/${b.room_id}/bookings/${b.id}/edit`)}
+                role="button"
+                tabIndex={0}
+                onKeyPress={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    navigate(`/meeting-rooms/${b.room_id}/bookings/${b.id}/edit`);
+                  }
+                }}
+              >
+                <div className={styles.bookingTitle}>{b.room_name}</div>
+                <div className={styles.bookingTime}>
+                  {new Date(b.start_time).toLocaleString()} –{' '}
+                  {new Date(b.end_time).toLocaleString()}
+                </div>
+                <div className={styles.bookingDescription}>{b.description}</div>
+              </li>
+            ))}
           </ul>
         )}
       </section>
 
-      <div className="mt-12 flex flex-wrap gap-4">
-        <button
-          onClick={() => navigate('/meeting-rooms')}
-          className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded transition"
-        >
+      <div className={styles.buttonGroup}>
+        <button onClick={() => navigate('/meeting-rooms')} className={styles.primaryButton}>
           Кімнати
         </button>
 
-        {role === 'admin' && (
-          <button
-            onClick={() => navigate('/meeting-rooms/new')}
-            className="bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded transition"
-          >
+        {userRole === 'admin' && (
+          <button onClick={() => navigate('/meeting-rooms/new')} className={styles.createButton}>
             Створити кімнату
           </button>
         )}

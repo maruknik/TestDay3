@@ -1,88 +1,19 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
-
-type MeetingRoom = {
-  id: string;
-  name: string;
-  description: string;
-};
-
-type RoomRoleMap = Record<string, 'admin' | 'user' | null>;
+import { useMeetingRooms } from '../../hooks/useMeetingRooms';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useUserRoles } from '../../hooks/useUserRoles';
+import { deleteMeetingRoom, addRoomUser } from '../../services/meetingRoomsService';
 
 export default function MeetingRoomsList() {
-  const [rooms, setRooms] = useState<MeetingRoom[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userRoles, setUserRoles] = useState<RoomRoleMap>({});
-
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const fetchUserRooms = async () => {
-      setLoading(true);
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user?.email) {
-        setLoading(false);
-        return;
-      }
-
-      setUserEmail(user.email);
-
-
-      const { data: roleData, error: roleError } = await supabase
-        .from('room_user_roles')
-        .select('room_id, role')
-        .eq('user_email', user.email);
-
-      if (roleError) {
-        console.error('Помилка отримання ролей користувача:', roleError);
-        setLoading(false);
-        return;
-      }
-
-      if (!roleData || roleData.length === 0) {
-
-        setRooms([]);
-        setUserRoles({});
-        setLoading(false);
-        return;
-      }
-
-      const rolesMap: RoomRoleMap = {};
-      roleData.forEach((r) => {
-        rolesMap[r.room_id] = r.role;
-      });
-      setUserRoles(rolesMap);
-
-      const roomIds = roleData.map((r) => r.room_id);
-
-      const { data: roomsData, error: roomsError } = await supabase
-        .from('meeting_rooms')
-        .select('*')
-        .in('id', roomIds);
-
-      if (roomsError) {
-        console.error('Помилка отримання кімнат:', roomsError);
-        setLoading(false);
-        return;
-      }
-
-      setRooms(roomsData ?? []);
-      setLoading(false);
-    };
-
-    fetchUserRooms();
-  }, []);
+  const userEmail = useCurrentUser();
+  const userRoles = useUserRoles(userEmail);
+  const { rooms, setRooms, loading } = useMeetingRooms();
 
   const handleDelete = async (id: string) => {
     if (confirm('Ви впевнені, що хочете видалити цю кімнату?')) {
-      await supabase.from('meeting_rooms').delete().eq('id', id);
-      setRooms((prev) => prev.filter((r) => r.id !== id));
+      await deleteMeetingRoom(id);
+      setRooms(prev => prev.filter(r => r.id !== id));
     }
   };
 
@@ -93,37 +24,8 @@ export default function MeetingRoomsList() {
     }
 
     try {
-      await supabase.from('room_user_roles').insert({
-        room_id: roomId,
-        user_email: userEmail,
-        role: 'user',
-      });
+      await addRoomUser(roomId, userEmail, 'user');
       alert('Ви долучились до кімнати');
-
-      const fetchRoomsAfterJoin = async () => {
-        const { data: roleData } = await supabase
-          .from('room_user_roles')
-          .select('room_id, role')
-          .eq('user_email', userEmail);
-
-        if (roleData) {
-          const rolesMap: RoomRoleMap = {};
-          roleData.forEach((r) => {
-            rolesMap[r.room_id] = r.role;
-          });
-          setUserRoles(rolesMap);
-
-          const roomIds = roleData.map((r) => r.room_id);
-          const { data: roomsData } = await supabase
-            .from('meeting_rooms')
-            .select('*')
-            .in('id', roomIds);
-
-          setRooms(roomsData ?? []);
-        }
-      };
-
-      await fetchRoomsAfterJoin();
     } catch {
       alert('Не вдалося долучитись до кімнати');
     }
@@ -161,7 +63,7 @@ export default function MeetingRoomsList() {
           <p className="text-center text-gray-500">Кімнати не знайдені.</p>
         ) : (
           <ul className="space-y-6">
-            {rooms.map((room) => {
+            {rooms.map(room => {
               const role = userRoles[room.id] || null;
 
               return (
@@ -170,8 +72,12 @@ export default function MeetingRoomsList() {
                   className="flex justify-between items-center bg-gray-700 rounded-lg p-6 shadow-md"
                 >
                   <div>
-                    <h2 className="text-2xl font-semibold text-white">{room.name}</h2>
-                    <p className="mt-1 text-gray-400">{room.description || 'Без опису'}</p>
+                    <h2 className="text-2xl font-semibold text-white">
+                      {room.name}
+                    </h2>
+                    <p className="mt-1 text-gray-400">
+                      {room.description || 'Без опису'}
+                    </p>
                   </div>
 
                   <div className="flex space-x-4">
@@ -185,7 +91,9 @@ export default function MeetingRoomsList() {
                     )}
 
                     <button
-                      onClick={() => navigate(`/meeting-rooms/${room.id}/bookings`)}
+                      onClick={() =>
+                        navigate(`/meeting-rooms/${room.id}/bookings`)
+                      }
                       className="bg-green-600 hover:bg-green-700 text-white py-2 px-5 rounded-md font-medium transition"
                     >
                       Бронювання
@@ -194,7 +102,9 @@ export default function MeetingRoomsList() {
                     {role === 'admin' && (
                       <>
                         <button
-                          onClick={() => navigate(`/meeting-rooms/${room.id}/edit`)}
+                          onClick={() =>
+                            navigate(`/meeting-rooms/${room.id}/edit`)
+                          }
                           className="bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-5 rounded-md font-medium transition"
                         >
                           Редагувати
@@ -205,9 +115,10 @@ export default function MeetingRoomsList() {
                         >
                           Видалити
                         </button>
-
                         <button
-                          onClick={() => navigate(`/meeting-rooms/${room.id}/users`)}
+                          onClick={() =>
+                            navigate(`/meeting-rooms/${room.id}/users`)
+                          }
                           className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-5 rounded-md font-medium transition"
                         >
                           Керувати користувачами

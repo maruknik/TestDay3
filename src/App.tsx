@@ -8,11 +8,11 @@ import ResetPassword from './pages/auth/ResetPassword';
 import Dashboard from './components/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 
-import MeetingRoomsList from './pages/MeetingRoomsList';
-import MeetingRoomForm from './pages/MeetingRoomForm';
-import BookingsList from './pages/BookingsList';
-import BookingForm from './pages/BookingForm';
-import RoomUsersManagement from './pages/RoomUsersManagement';
+import MeetingRoomsList from './pages/meeting-room/MeetingRoomsList';
+import MeetingRoomForm from './pages/meeting-room/MeetingRoomForm';
+import BookingsList from './pages/booking/BookingsList';
+import BookingForm from './pages/booking/BookingForm';
+import RoomUsersManagement from './pages/room-users/RoomUsersManagement';
 
 export default function App() {
   return (

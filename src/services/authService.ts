@@ -21,6 +21,21 @@ export const register = async (email: string, password: string, name: string) =>
   return data;
 };
 
+
+export async function checkSession(): Promise<boolean> {
+  const { data } = await supabase.auth.getSession();
+  return !!data.session;
+}
+
+export function onAuthChange(callback: (isAuthenticated: boolean) => void) {
+  const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+    callback(!!session);
+  });
+
+  return () => subscription?.subscription.unsubscribe();
+}
+
+
 export const getCurrentUser = async (): Promise<User | null> => {
   const { data, error } = await supabase.auth.getUser();
   if (error) {
